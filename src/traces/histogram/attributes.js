@@ -193,6 +193,16 @@ module.exports = {
         ].join(' ')
     },
 
+    bingroup: {
+        valType: 'string',
+        role: 'info',
+        dflt: '',
+        editType: 'calc',
+        description: [
+            '...'
+        ].join(' ')
+    },
+
     hovertemplate: hovertemplateAttrs({}, {
         keys: constants.eventDataKeys
     }),

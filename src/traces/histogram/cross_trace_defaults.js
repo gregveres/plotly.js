@@ -9,11 +9,12 @@
 'use strict';
 
 var Lib = require('../../lib');
-var nestedProperty = Lib.nestedProperty;
+var axisIds = require('../../plots/cartesian/axis_ids');
 
 var handleGroupingDefaults = require('../bar/defaults').handleGroupingDefaults;
-var getAxisGroup = require('../../plots/cartesian/axis_ids').getAxisGroup;
 var attributes = require('./attributes');
+
+var nestedProperty = Lib.nestedProperty;
 
 var BINATTRS = {
     x: [
@@ -36,8 +37,8 @@ module.exports = function crossTraceDefaults(fullData, fullLayout) {
     var isOverlay = fullLayout.barmode === 'overlay';
     var i, j, traceOut, traceIn, binDirection, group, binOpts;
 
-    function coerce(attr) {
-        return Lib.coerce(traceOut._input, traceOut, attributes, attr);
+    function coerce(attr, dflt) {
+        return Lib.coerce(traceOut._input, traceOut, attributes, attr, dflt);
     }
 
     for(i = 0; i < fullData.length; i++) {
@@ -49,23 +50,45 @@ module.exports = function crossTraceDefaults(fullData, fullLayout) {
         delete traceOut._autoBinFinished;
 
         binDirection = traceOut.orientation === 'v' ? 'x' : 'y';
+
         // in overlay mode make a separate group for each trace
         // otherwise collect all traces of the same subplot & orientation
-        group = traceOut._groupName = isOverlay ? traceOut.uid : (
-            getAxisGroup(fullLayout, traceOut.xaxis) +
-            getAxisGroup(fullLayout, traceOut.yaxis) +
-            binDirection
-        );
+        //
+        // TODO
+        // - group overlay trace with same bingroup
+        // - can we have bingroup apply to the x and y bins at the same time? (yes, but of same ax.type)
+        // - does bingroup make sense across different axes?? (yes, but of same ax.type)
+        // - should we even coerce bingroup for barmode other than 'overlay'?? (make the current groupName the dflt)
+
+        var binGroupDflt;
+        if(!isOverlay) {
+            binGroupDflt = (
+                axisIds.getAxisGroup(fullLayout, traceOut.xaxis) +
+                axisIds.getAxisGroup(fullLayout, traceOut.yaxis) +
+                binDirection
+            );
+        }
+
+        group = coerce('bingroup', binGroupDflt) || traceOut.uid;
         binOpts = allBinOpts[group];
 
+        var axType = axisIds.getFromTrace({_fullLayout: fullLayout}, traceOut, binDirection).type;
+
         if(binOpts) {
-            binOpts.traces.push(traceOut);
+            if(axType === binOpts.axType) {
+                binOpts.traces.push(traceOut);
+            } else {
+                Lib.warn('!!!');
+            }
         } else {
             binOpts = allBinOpts[group] = {
                 traces: [traceOut],
-                direction: binDirection
+                direction: binDirection,
+                axType: axType
             };
         }
+
+        traceOut._groupName = group;
 
         handleGroupingDefaults(traceOut._input, traceOut, fullLayout, coerce);
     }
