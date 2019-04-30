@@ -196,6 +196,7 @@ function doAutoBin(trace, axLetter, data, ax, r2c, c2r, calendar) {
     var autoEnd = binSpec.end === undefined;
 
     if(autoSize || autoStart || autoEnd) {
+        // TODO Lib.concat data according to `binggroup`
         var newBinSpec = Axes.autoBin(data, ax, trace['nbins' + axLetter], '2d', calendar, binSpec.size);
         if(trace.type === 'histogram2dcontour') {
             // the "true" 2nd argument reverses the tick direction (which we can't

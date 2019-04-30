@@ -193,6 +193,8 @@ module.exports = {
         ].join(' ')
     },
 
+    // TODO should this be xbinggroup / ybingroup ??
+
     bingroup: {
         valType: 'string',
         role: 'info',

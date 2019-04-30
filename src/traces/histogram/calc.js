@@ -197,7 +197,7 @@ module.exports = function calc(gd, trace) {
 
 /*
  * calcAllAutoBins: we want all histograms on the same axes to share bin specs
- * if they're grouped or stacked. If the user has explicitly specified differing
+ * if they're grouped or stacked or ... (??). If the user has explicitly specified differing
  * bin specs, there's nothing we can do, but if possible we will try to use the
  * smallest bins of any of the auto values for all histograms grouped/stacked
  * together.
@@ -258,6 +258,8 @@ function calcAllAutoBins(gd, trace, pa, mainData, _overlayEdgeCase) {
         var newBinSpec = Axes.autoBin(
             allPos, pa, binOpts.nbins, false, calendar, sizeFound && binOpts.size);
 
+        // TODO how does work with bingroup ????
+        //
         // Edge case: single-valued histogram overlaying others
         // Use them all together to calculate the bin size for the single-valued one
         if(isOverlay && newBinSpec._dataSpan === 0 &&

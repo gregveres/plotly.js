@@ -90,6 +90,8 @@ function handleGroupingDefaults(traceIn, traceOut, fullLayout, coerce) {
 
         traceOut._offsetIndex = offsetGroupOpts.offsetIndex;
     }
+
+    // TODO stackgroup !!
 }
 
 function crossTraceDefaults(fullData, fullLayout) {
