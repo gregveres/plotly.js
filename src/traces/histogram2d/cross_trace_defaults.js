@@ -18,25 +18,59 @@ var attributes = require('./attributes');
 
 var BINDIRECTIONS = ['x', 'y'];
 
-// Handle bin attrs and relink auto-determined values so fullData is complete
-// does not have cross-trace coupling, but moved out here so we have axis types
-// and relinked trace._autoBin
 module.exports = function crossTraceDefaults(fullData, fullLayout) {
-    var i, j, traceOut, binDirection;
+    var allBinOpts = fullLayout._histogramBinOpts = {};
+    var i, j, traceOut, binDirection, group, binOpts;
 
-    function coerce(attr) {
-        return Lib.coerce(traceOut._input, traceOut, attributes, attr);
+    function coerce(attr, dflt) {
+        return Lib.coerce(traceOut._input, traceOut, attributes, attr, dflt);
     }
 
     for(i = 0; i < fullData.length; i++) {
         traceOut = fullData[i];
+
         var type = traceOut.type;
         if(type !== 'histogram2d' && type !== 'histogram2dcontour') continue;
 
+        coerce('bingroup');
+
         for(j = 0; j < BINDIRECTIONS.length; j++) {
             binDirection = BINDIRECTIONS[j];
-            var binAttr = binDirection + 'bins';
+            group = traceOut.bingroup || traceOut.uid + '_' + binDirection;
+            binOpts = allBinOpts[group];
+
+            var axType = axisIds.getFromTrace({_fullLayout: fullLayout}, traceOut, binDirection).type;
+
+            if(binOpts) {
+                if(axType === binOpts.axType) {
+                    binOpts.traces.push(traceOut);
+                } else {
+                    Lib.warn('!!!');
+                }
+            } else {
+                binOpts = allBinOpts[group] = {
+                    traces: [traceOut],
+                    direction: binDirection,
+                    axType: axType
+                };
+            }
+
+            traceOut._groupName = group;
+        }
+    }
+
+    for(group in allBinOpts) {
+        binOpts = allBinOpts[group];
+        binDirection = binOpts.direction;
+
+        var binAttr = binDirection + 'bins';
+
+        for(i = 0; i < binOpts.traces.length; i++) {
+            traceOut = binOpts.traces[i];
             var autoBins = (traceOut._autoBin || {})[binDirection] || {};
+
+            // TODO not quite ...
+
             coerce(binAttr + '.start', autoBins.start);
             coerce(binAttr + '.end', autoBins.end);
             coerce(binAttr + '.size', autoBins.size);

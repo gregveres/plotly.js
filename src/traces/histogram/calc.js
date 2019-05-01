@@ -11,6 +11,7 @@
 var isNumeric = require('fast-isnumeric');
 
 var Lib = require('../../lib');
+var Registry = require('../../registry');
 var Axes = require('../../plots/cartesian/axes');
 
 var arraysToCalcdata = require('../bar/arrays_to_calcdata');
@@ -19,7 +20,7 @@ var normFunctions = require('./norm_functions');
 var doAvg = require('./average');
 var getBinSpanLabelRound = require('./bin_label_vals');
 
-module.exports = function calc(gd, trace) {
+function calc(gd, trace) {
     var pos = [];
     var size = [];
     var pa = Axes.getFromId(gd, trace.orientation === 'h' ? trace.yaxis : trace.xaxis);
@@ -193,7 +194,7 @@ module.exports = function calc(gd, trace) {
     }
 
     return cd;
-};
+}
 
 /*
  * calcAllAutoBins: we want all histograms on the same axes to share bin specs
@@ -205,10 +206,12 @@ module.exports = function calc(gd, trace) {
 function calcAllAutoBins(gd, trace, pa, mainData, _overlayEdgeCase) {
     var binAttr = mainData + 'bins';
     var fullLayout = gd._fullLayout;
+    var binOpts = fullLayout._histogramBinOpts[trace['_groupName' + mainData]];
+    var is2dMap = Registry.traceIs(trace, '2dMap');
     var isOverlay = fullLayout.barmode === 'overlay';
     var i, traces, tracei, calendar, pos0, autoVals, cumulativeSpec;
 
-    var cleanBound = (pa.type === 'date') ?
+    var cleanBound = pa.type === 'date' ?
         function(v) { return (v || v === 0) ? Lib.cleanDate(v, null, pa.calendar) : null; } :
         function(v) { return isNumeric(v) ? Number(v) : null; };
 
@@ -222,8 +225,6 @@ function calcAllAutoBins(gd, trace, pa, mainData, _overlayEdgeCase) {
         }
     }
 
-    var binOpts = fullLayout._histogramBinOpts[trace._groupName];
-
     // all but the first trace in this group has already been marked finished
     // clear this flag, so next time we run calc we will run autobin again
     if(trace._autoBinFinished) {
@@ -232,7 +233,9 @@ function calcAllAutoBins(gd, trace, pa, mainData, _overlayEdgeCase) {
         traces = binOpts.traces;
         var sizeFound = binOpts.sizeFound;
         var allPos = [];
-        autoVals = traces[0]._autoBin = {};
+        var autoBin = traces[0]._autoBin = {};
+        autoVals = autoBin[binOpts.binDir] = {};
+
         // Note: we're including `legendonly` traces here for autobin purposes,
         // so that showing & hiding from the legend won't affect bins.
         // But this complicates things a bit since those traces don't `calc`,
@@ -254,15 +257,17 @@ function calcAllAutoBins(gd, trace, pa, mainData, _overlayEdgeCase) {
                 }
             }
         }
-        calendar = traces[0][mainData + 'calendar'];
-        var newBinSpec = Axes.autoBin(
-            allPos, pa, binOpts.nbins, false, calendar, sizeFound && binOpts.size);
 
-        // TODO how does work with bingroup ????
+        calendar = traces[0][mainData + 'calendar'];
+        var newBinSpec = Axes.autoBin(allPos, pa, binOpts.nbins, is2dMap, calendar, sizeFound && binOpts.size);
+
+        // TODO
+        // - how does work with bingroup ????
+        // - skip for 2dMap trace!!
         //
         // Edge case: single-valued histogram overlaying others
         // Use them all together to calculate the bin size for the single-valued one
-        if(isOverlay && newBinSpec._dataSpan === 0 &&
+        if(isOverlay && !is2dMap && newBinSpec._dataSpan === 0 &&
             pa.type !== 'category' && pa.type !== 'multicategory') {
             // Several single-valued histograms! Stop infinite recursion,
             // just return an extra flag that tells handleSingleValueOverlays
@@ -273,7 +278,7 @@ function calcAllAutoBins(gd, trace, pa, mainData, _overlayEdgeCase) {
         }
 
         // adjust for CDF edge cases
-        cumulativeSpec = tracei.cumulative;
+        cumulativeSpec = tracei.cumulative || {};
         if(cumulativeSpec.enabled && (cumulativeSpec.currentbin !== 'include')) {
             if(cumulativeSpec.direction === 'decreasing') {
                 newBinSpec.start = pa.c2r(Axes.tickIncrement(
@@ -464,7 +469,6 @@ function getConnectedHistograms(gd, trace) {
     return out;
 }
 
-
 function cdf(size, direction, currentBin) {
     var i, vi, prevSum;
 
@@ -512,3 +516,8 @@ function cdf(size, direction, currentBin) {
         }
     }
 }
+
+module.exports = {
+    calc: calc,
+    calcAllAutoBins: calcAllAutoBins
+};

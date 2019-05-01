@@ -9,6 +9,7 @@
 'use strict';
 
 var Lib = require('../../lib');
+var Registry = require('../../registry');
 var axisIds = require('../../plots/cartesian/axis_ids');
 
 var handleGroupingDefaults = require('../bar/defaults').handleGroupingDefaults;
@@ -31,26 +32,6 @@ var BINATTRS = {
     ]
 };
 
-// handle bin attrs and relink auto-determined values so fullData is complete
-module.exports = function crossTraceDefaults(fullData, fullLayout) {
-    var allBinOpts = fullLayout._histogramBinOpts = {};
-    var isOverlay = fullLayout.barmode === 'overlay';
-    var i, j, traceOut, traceIn, binDirection, group, binOpts;
-
-    function coerce(attr, dflt) {
-        return Lib.coerce(traceOut._input, traceOut, attributes, attr, dflt);
-    }
-
-    for(i = 0; i < fullData.length; i++) {
-        traceOut = fullData[i];
-        if(traceOut.type !== 'histogram') continue;
-
-        // TODO: this shouldn't be relinked as it's only used within calc
-        // https://github.com/plotly/plotly.js/issues/749
-        delete traceOut._autoBinFinished;
-
-        binDirection = traceOut.orientation === 'v' ? 'x' : 'y';
-
         // in overlay mode make a separate group for each trace
         // otherwise collect all traces of the same subplot & orientation
         //
@@ -60,43 +41,80 @@ module.exports = function crossTraceDefaults(fullData, fullLayout) {
         // - does bingroup make sense across different axes?? (yes, but of same ax.type)
         // - should we even coerce bingroup for barmode other than 'overlay'?? (make the current groupName the dflt)
 
-        var binGroupDflt;
-        if(!isOverlay) {
-            binGroupDflt = (
-                axisIds.getAxisGroup(fullLayout, traceOut.xaxis) +
-                axisIds.getAxisGroup(fullLayout, traceOut.yaxis) +
-                binDirection
-            );
-        }
+// handle bin attrs and relink auto-determined values so fullData is complete
+module.exports = function crossTraceDefaults(fullData, fullLayout) {
+    var allBinOpts = fullLayout._histogramBinOpts = {};
+    var isOverlay = fullLayout.barmode === 'overlay';
+    var i, j, k, traceOut, binDir, group, binOpts;
 
-        group = coerce('bingroup', binGroupDflt) || traceOut.uid;
-        binOpts = allBinOpts[group];
+    function coerce(attr, dflt) {
+        return Lib.coerce(traceOut._input, traceOut, attributes, attr, dflt);
+    }
 
-        var axType = axisIds.getFromTrace({_fullLayout: fullLayout}, traceOut, binDirection).type;
+    for(i = 0; i < fullData.length; i++) {
+        traceOut = fullData[i];
 
-        if(binOpts) {
-            if(axType === binOpts.axType) {
-                binOpts.traces.push(traceOut);
-            } else {
-                Lib.warn('!!!');
+        if(!Registry.traceIs(traceOut, 'histogram')) continue;
+
+        // TODO: this shouldn't be relinked as it's only used within calc
+        // https://github.com/plotly/plotly.js/issues/749
+        delete traceOut._autoBinFinished;
+
+        var is2dMap = Registry.traceIs(traceOut, '2dMap');
+
+        var binDirections = is2dMap ?
+            ['x', 'y'] :
+            traceOut.orientation === 'v' ? ['x'] : ['y'];
+
+        for(k = 0; k < binDirections.length; k++) {
+            binDir = binDirections[k];
+
+            var binGroupDflt;
+            if(!isOverlay && !is2dMap) {
+                binGroupDflt = (
+                    axisIds.getAxisGroup(fullLayout, traceOut.xaxis) +
+                    axisIds.getAxisGroup(fullLayout, traceOut.yaxis) +
+                    binDir
+                );
             }
-        } else {
-            binOpts = allBinOpts[group] = {
-                traces: [traceOut],
-                direction: binDirection,
-                axType: axType
-            };
+
+            group = coerce('bingroup', binGroupDflt);
+            // N.B. group traces that don't have a bingroup with themselves
+            // using trace uid and bin direction
+            if(!group) group = traceOut.uid + '_' + binDir;
+
+            var axType = axisIds.getFromTrace({_fullLayout: fullLayout}, traceOut, binDir).type;
+            binOpts = allBinOpts[group];
+
+            if(binOpts) {
+                if(axType === binOpts.axType) {
+                    binOpts.traces.push(traceOut);
+                } else {
+                    Lib.warn('!!!');
+                }
+            } else {
+                binOpts = allBinOpts[group] = {
+                    traces: [traceOut],
+                    binDir: binDir,
+                    axType: axType
+                };
+            }
+
+            traceOut['_groupName' + binDir] = group;
         }
 
-        traceOut._groupName = group;
-
-        handleGroupingDefaults(traceOut._input, traceOut, fullLayout, coerce);
+        if(!is2dMap) {
+            handleGroupingDefaults(traceOut._input, traceOut, fullLayout, coerce);
+        }
     }
 
     for(group in allBinOpts) {
         binOpts = allBinOpts[group];
-        binDirection = binOpts.direction;
-        var attrs = BINATTRS[binDirection];
+        binDir = binOpts.binDir;
+
+        var attrs = BINATTRS[binDir];
+        var autoVals;
+
         for(j = 0; j < attrs.length; j++) {
             var attrSpec = attrs[j];
             var attr = attrSpec.name;
@@ -108,14 +126,14 @@ module.exports = function crossTraceDefaults(fullData, fullLayout) {
             var aStr = attrSpec.aStr;
             for(i = 0; i < binOpts.traces.length; i++) {
                 traceOut = binOpts.traces[i];
-                traceIn = traceOut._input;
-                if(nestedProperty(traceIn, aStr).get() !== undefined) {
+                if(nestedProperty(traceOut._input, aStr).get() !== undefined) {
                     binOpts[attr] = coerce(aStr);
                     binOpts[attr + 'Found'] = true;
                     break;
                 }
-                var autoVals = traceOut._autoBin;
-                if(autoVals && autoVals[attr]) {
+
+                autoVals = (traceOut._autoBin || {})[binDir] || {};
+                if(autoVals[attr]) {
                     // if this is the *first* autoval
                     nestedProperty(traceOut, aStr).set(autoVals[attr]);
                 }
@@ -126,7 +144,8 @@ module.exports = function crossTraceDefaults(fullData, fullLayout) {
             if(attr === 'start' || attr === 'end') {
                 for(; i < binOpts.traces.length; i++) {
                     traceOut = binOpts.traces[i];
-                    coerce(aStr, (traceOut._autoBin || {})[attr]);
+                    autoVals = (traceOut._autoBin || {})[binDir] || {};
+                    coerce(aStr, autoVals[attr]);
                 }
             }
 

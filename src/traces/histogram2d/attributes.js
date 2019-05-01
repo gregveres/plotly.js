@@ -44,6 +44,8 @@ module.exports = extendFlat(
         autobinx: histogramAttrs.autobinx,
         autobiny: histogramAttrs.autobiny,
 
+        bingroup: histogramAttrs.bingroup,
+
         xgap: heatmapAttrs.xgap,
         ygap: heatmapAttrs.ygap,
         zsmooth: heatmapAttrs.zsmooth,
