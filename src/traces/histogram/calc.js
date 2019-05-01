@@ -231,7 +231,6 @@ function calcAllAutoBins(gd, trace, pa, mainData, _overlayEdgeCase) {
         delete trace._autoBinFinished;
     } else {
         traces = binOpts.traces;
-        var sizeFound = binOpts.sizeFound;
         var allPos = [];
         var autoBin = traces[0]._autoBin = {};
         autoVals = autoBin[binOpts.binDir] = {};
@@ -259,7 +258,7 @@ function calcAllAutoBins(gd, trace, pa, mainData, _overlayEdgeCase) {
         }
 
         calendar = traces[0][mainData + 'calendar'];
-        var newBinSpec = Axes.autoBin(allPos, pa, binOpts.nbins, is2dMap, calendar, sizeFound && binOpts.size);
+        var newBinSpec = Axes.autoBin(allPos, pa, binOpts.nbins, is2dMap, calendar, binOpts.sizeFound && binOpts.size);
 
         // TODO
         // - how does work with bingroup ????
@@ -294,7 +293,7 @@ function calcAllAutoBins(gd, trace, pa, mainData, _overlayEdgeCase) {
         }
 
         binOpts.size = newBinSpec.size;
-        if(!sizeFound) {
+        if(!binOpts.sizeFound) {
             autoVals.size = newBinSpec.size;
             Lib.nestedProperty(traces[0], binAttr + '.size').set(newBinSpec.size);
         }

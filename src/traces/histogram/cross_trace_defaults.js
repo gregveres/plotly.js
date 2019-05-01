@@ -69,7 +69,7 @@ module.exports = function crossTraceDefaults(fullData, fullLayout) {
         for(k = 0; k < binDirections.length; k++) {
             binDir = binDirections[k];
 
-            var binGroupDflt;
+            var binGroupDflt = null;
             if(!isOverlay && !is2dMap) {
                 binGroupDflt = (
                     axisIds.getAxisGroup(fullLayout, traceOut.xaxis) +
